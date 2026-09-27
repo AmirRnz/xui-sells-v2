@@ -1,0 +1,686 @@
+# Master prompt for Gemini 3.8 Flash High
+
+You are Gemini 3.8 Flash High, acting as the architect, technical lead, and integration reviewer for this project. Build the complete system specified below. Delegate implementation to Gemini 3.8 Flash High subagents using High thinking (`gemini-3.8-flash`, `high`). You own the architecture, shared contracts, coordination, review, and final verification.
+
+This is an implementation request, not a request for an outline, a prototype, or a collection of disconnected applications. Deliver working software, migrations, tests, installation and update tooling, backup and restore tooling, and operating documentation.
+
+## 1. Fidelity and terminology
+
+The product requirements in section 2 are authoritative. Preserve every feature, workflow, restriction, example, atnd distinction. Do not simplify, remove, replace, or silently reinterpret them. The engineering decisions in later sections explain how to build the product; they do not authorize changes to its business behavior.
+
+The repository includes `3x-ui_openapi.json`, which I am providing as the complete 3x-ui API documentation for this project. **You and every subagent doing 3x-ui-related work must use this file first.** It is the primary API contract for integration design, endpoint selection, request/response models, and contract tests. Read it before making 3x-ui integration assumptions or writing related code. Do not substitute remembered endpoints, a third-party SDK's assumptions, or a different online API version for this supplied contract.
+
+Numbers introduced as examples are examples of administrator-configurable values, not mandatory hardcoded defaults.
+
+When a business rule is unspecified, identify the precise missing decision and ask a focused question before implementing behavior that depends on it. Continue independent work while awaiting an answer. Make ordinary engineering decisions autonomously. Do not repeatedly ask permission for work already authorized by this prompt.
+
+Use these terms consistently:
+
+- **VPN subscription / service / client:** a service provisioned through 3x-ui.
+- **VPN plan:** the commercial and provisioning configuration used to create a VPN subscription.
+- **Reseller membership:** the Free, Pro, or Ultimate subscription to the reseller bot, which grants capabilities and limits. This is separate from a VPN subscription.
+- **Customer instance:** a Telegram bot for ordinary customers.
+- **Reseller instance:** a Telegram bot for resellers.
+- **Child customer bot:** a customer instance owned by a reseller and attached to a parent reseller instance.
+- **User count:** the purchased limit mapped to the 3x-ui IP-limit setting. It does not mean the number of Telegram accounts.
+- **Group name:** the 3x-ui grouping value, distinct from the client name and subscription ID.
+
+## 2. Product requirements
+
+### P01. Product scope
+
+I already run a VPN service on my server using 3x-ui. I want to sell subscriptions through Telegram bots to two categories of buyers:
+
+1. Ordinary customers.
+2. Resellers who sell subscriptions to their own customers.
+
+There are two separate top-level Telegram bot types: a customer bot and a reseller bot. They must be part of one integrated system. Reseller-owned customer bots, the web panel, and the installation/management CLI must belong to that same system.
+
+### P02. Ordinary-customer free trials
+
+Customers can obtain free trials. Multiple VPN plans may offer trials.
+
+The administrator configures the trial subscriptions created in 3x-ui, including their maximum traffic allowance and validity duration. The administrator also controls when a user can obtain another trial after taking one.
+
+Support the described trial-policy requirements: a waiting period before another trial, and a configurable number of trials in a specified time window. For example, a plan may allow two trial accounts per user per week. Clarify their interaction if necessary; do not silently discard either requirement.
+
+Trial eligibility and limits are calculated separately for each VPN plan. For example, if two plans each allow two trials per week, a customer can obtain two trials from each plan during that week. Taking a trial from one plan must not consume another plan's allowance.
+
+### P03. Ordinary-customer purchase flow
+
+Preserve this sequence:
+
+1. The customer chooses an available VPN plan.
+2. The customer selects the subscription duration, such as one month, two months, or another available duration.
+3. The bot asks how many users the subscription should support. Map this value to the IP-limit setting in 3x-ui.
+4. The bot asks the customer to enter a subscription name or let the bot generate a random name.
+5. The system calculates the amount payable.
+6. The bot presents the available payment methods.
+
+### P04. Payments and wallet funding
+
+There are currently two checkout choices:
+
+- Pay from the wallet.
+- Pay directly.
+
+The current external payment mechanism is a manual bank-card transfer with administrator approval.
+
+For direct payment:
+
+1. Show the administrator's bank-card number and cardholder name.
+2. The customer transfers the money.
+3. The customer submits either a receipt photo or receipt text to the bot.
+4. The bot sends the receipt to the administrator for review.
+5. Only after administrator approval does the system create the subscription in 3x-ui and deliver it to the customer.
+
+Deliver both the subscription link and its QR code.
+
+Customers fund their wallets in advance through the same bank-transfer, receipt-submission, and administrator-approval process. An approved wallet balance is then available for wallet checkout.
+
+Do not mistake the statement that card transfer is the only current payment mechanism for a request to remove wallet checkout. Do not introduce a payment gateway as a replacement for the specified flow.
+
+### P05. My Services
+
+Customers have a **My Services** section where they can:
+
+- View the services they purchased.
+- Select a service and inspect its information.
+- Press a button to receive the subscription link and QR code again.
+- Renew the service.
+- Increase its user count and pay the applicable cost.
+- Decrease its user count.
+
+Decreasing the user count must change the subscription ID. The customer must therefore update the subscription link in their VPN application. Clearly explain this consequence and provide the new link and QR code after the operation.
+
+Provide a dedicated action for decreasing user count. Also allow user-count increases and decreases during renewal. A decrease performed during renewal must have the same subscription-ID-change behavior.
+
+Do not invent a financial credit or penalty for decreasing user count; the financial rule must be clarified if needed.
+
+### P06. Support
+
+The main bot menu includes a support option that provides the configured Telegram support ID.
+
+Customers can also submit support tickets through the bot instead of contacting the support account directly. Provide the necessary ticket handling and replies for this to be usable.
+
+### P07. Administrator access and client management
+
+The administrator opens a dedicated administration menu with `/admin` and configures the bot through it.
+
+The first option is **Create Client**. It follows a selection flow similar to the customer purchase flow, creates the subscription in 3x-ui, and returns its subscription link to the administrator. This is an administrator provisioning operation; do not invent a requirement for the administrator to submit a payment receipt to themselves.
+
+During creation, the administrator may assign the subscription to a Telegram user. If assigned, it appears in that user's My Services section. A subscription may also remain unassigned.
+
+The next option is **Assign Client**. It allows the administrator to assign an already-existing subscription to a Telegram user. Include existing 3x-ui clients, rather than limiting this to clients newly created in the application.
+
+### P08. VPN plan administration
+
+Provide a **Plans** option for configuring the settings used to create 3x-ui clients. Each plan includes:
+
+- Plan name.
+- Description, displayed before purchase.
+- Usage notes, displayed after purchase.
+- Associated inbound or inbounds.
+- Base price.
+- Price for each additional user.
+- Base number of included users.
+- Maximum number of users to which the subscription can be increased.
+- Available subscription durations.
+- Percentage discounts for particular durations.
+
+For example, a plan may be offered for one, three, and six months, with a 10% discount for three months and a 20% discount for six months.
+
+The same VPN plan can also be offered as a trial. Configure its trial settings in this same plan-management area:
+
+- Maximum trial traffic allowance.
+- Maximum trial validity.
+- Repeat-trial eligibility, including the waiting-period requirement described above.
+- Number of trials a user can obtain in a configured time window, such as two per week.
+
+Enforce these limits independently for each plan.
+
+### P09. General bot settings and currencies
+
+Provide settings for:
+
+- The bank-card number used for direct payments and wallet funding.
+- The cardholder's name.
+- The minimum allowed wallet top-up.
+- Currency, with only US dollars and toman selectable for now.
+- The Telegram support ID.
+- The group name assigned to subscriptions created in 3x-ui.
+
+The Persian bank-card message must preserve this structure:
+
+```text
+شماره کارت جهت واریز:
+X
+نام صاحب کارت: X
+```
+
+Replace the placeholders with the configured values. Provide the corresponding English message when the user's selected bot language is English.
+
+Toman needs the following input and display behavior:
+
+- If I enter a base price of `200`, the customer sees `200 thousand toman`, corresponding to `200 هزار تومن` in Persian.
+- In an example with no other price adjustments, buying five such months costs `1 million toman`, corresponding to `1 میلیون تومن`.
+- Do not display that total as `1000 thousand toman`.
+
+The observation that 200 thousand toman is approximately one dollar is explanatory context, not a request for a fixed or live exchange rate. Do not turn toman into rial or introduce automatic currency conversion.
+
+For an ordinary customer instance, every subscription created in 3x-ui uses its configured group name. The reseller-specific group-name behavior is defined below.
+
+### P10. User administration and manual credits
+
+Provide a **Users** administration section. I leave the supporting feature list for this section to your judgment, but it must include viewing user information and manually crediting user wallets.
+
+The administrator can:
+
+- Credit a single selected user.
+- Select individual users to credit.
+- Apply a credit to all users.
+- Write a message accompanying the credit.
+
+The notification must first state the amount credited, with the administrator's message on the next line. For example:
+
+```text
+Your account has been credited with 1 dollar.
+<Administrator's message>
+```
+
+Localize the notification and currency formatting correctly.
+
+### P11. Statistics
+
+Provide an administration section for operational and overall bot statistics. Flesh out the useful statistics and user-management details within the discretion explicitly granted here.
+
+### P12. Pending administrator approvals
+
+Provide an administration option showing every transaction waiting for administrator approval. This includes purchases, renewals, wallet top-ups, and refunds, plus any other transaction in the implemented flows that requires approval.
+
+The administrator must be able to inspect each request and complete its approval or rejection workflow.
+
+### P13. Broadcasts
+
+Provide a broadcast option. The administrator selects a message and can send it either:
+
+- To all users of the bot.
+- Only to users with active subscriptions.
+
+### P14. Refunds
+
+Customers can request a refund for up to an administrator-configured number of days after purchasing their subscription.
+
+Provide a **Refunds** option in the administrator's main menu for the relevant refund settings.
+
+During the eligible period, customers can use a refund button in My Services. They submit an explanation and may attach a photo. The photo is optional.
+
+Refund requests appear in the administrator's pending-approval workflow. The specification does not yet define the refund amount formula or destination; resolve those business decisions before implementing settlement.
+
+### P15. Invite Friends
+
+Provide an **Invite Friends** section.
+
+Customers who invite friends can receive a percentage of the money those friends spend inside the bot. The administrator configures the percentage from the administration menu.
+
+This is a reward based on referred friends' spending. Do not replace it with a fixed signup reward or assume a multilevel referral program.
+
+### P16. Reseller bot: inherited behavior and onboarding
+
+The reseller bot works exactly like the ordinary-customer bot except for the differences specified below. Retain the ordinary-customer functionality wherever a reseller-specific rule does not change it.
+
+Each reseller's first required action after starting the bot is choosing the name of their own service. Use that reseller-specific name as the 3x-ui group name for their services.
+
+Resellers have greater management capabilities in My Services. Define the exact additional permissions with me where they are not specified; do not silently grant access to other resellers' services or unrestricted 3x-ui administration.
+
+### P17. Reseller memberships, quotas, and feature access
+
+Resellers can purchase a bot membership to obtain additional capabilities. The tiers are **Free**, **Pro**, and **Ultimate**.
+
+Example configurable trial quantities:
+
+- Free: 10 trial accounts per day.
+- Pro: 25 trial accounts per day.
+- Ultimate: 100 trial accounts per day.
+
+Example configurable refund windows:
+
+- Free: one day.
+- Pro: two days.
+- Ultimate: three days.
+
+The administrator determines these values.
+
+In VPN plan creation/configuration, ask separately for the trial limits for Free, Pro, and Ultimate. Configure the tier-specific refund windows in the refund-management section.
+
+Some VPN plans can be restricted to Pro or Ultimate members. The administrator can also configure which features are available to which membership tiers.
+
+Membership prices, durations, and lifecycle behavior are not specified here. Clarify them rather than inventing a commercial model.
+
+### P18. Tier-specific trial variants
+
+When configuring a VPN plan's trial settings in the reseller bot, ask three times: once for Free, once for Pro, and once for Ultimate.
+
+This includes the traffic and validity settings as well as the relevant quantity limits. For example:
+
+- The Free trial variant might provide 1 GB for one hour.
+- The Pro trial variant has its separately configured limits.
+- The Ultimate trial variant might provide 5 GB for one day.
+
+An Ultimate reseller can choose among all three permitted trial variants when obtaining a trial: the Free variant, the Pro variant, or the Ultimate variant.
+
+Do not collapse these choices into a single trial variant merely because the reseller has the highest tier. Preserve separate per-plan trial accounting and clarify any unspecified interaction between overall tier quotas and per-plan quotas.
+
+### P19. Reseller-owned customer bots
+
+The most important reseller feature is the ability to have their own instance of the ordinary-customer bot.
+
+Its settings inherit from the parent reseller bot, and it behaves like the ordinary-customer bot. The reseller becomes the administrator of their child customer bot, and their customers use it.
+
+Allow the reseller to configure their customer bot within the capabilities granted by their reseller membership and the parent settings.
+
+Examples:
+
+- If an Ultimate reseller is entitled to a three-day refund window, they can offer their customers one day, disable refunds, or offer three days. They cannot exceed their allowance.
+- They can choose a trial variant for their customers from the variants they are permitted to use.
+
+The parent administrator can control access to features by membership tier, including the ability to operate a customer bot where configured.
+
+A child customer bot must be another configured instance of the shared customer-bot engine. It must not be generated as a separate codebase or copied project.
+
+Child customer bot creation is initiated and completed from inside the parent reseller bot. The reseller provides the child bot's Telegram bot token in that bot flow. Do not require the reseller to use the host CLI or to re-enter parent-instance credentials for normal child-bot creation.
+
+For a reseller-created child customer bot, derive the remaining end-user-instance ownership and connection data from the parent reseller context: use the same 3x-ui panel URL and 3x-ui API key as the parent reseller instance, and set the child bot's administrator Telegram ID to that reseller's own numeric Telegram ID. Any additional child-specific value that must be chosen rather than inherited must be collected through this same reseller-bot setup flow according to the existing configuration and inheritance rules. Do not ask the reseller to re-enter data that is already inherited or deterministically known.
+
+### P20. Shared reseller credit
+
+The reseller's wallet credit and the operating credit of their customer bot are synchronized and shared.
+
+Customers can purchase through that bot only when the reseller has enough credit to fund the purchase. If the reseller has insufficient credit:
+
+- The customer receives an error telling them to contact support.
+- The reseller receives an insufficient-credit notification.
+
+This must remain true regardless of whether the customer's checkout uses direct payment or the customer's own wallet.
+
+Do not confuse shared reseller funding with customers sharing the reseller's personal wallet. Customer wallet balances, retail payments, and reseller funding obligations are distinct accounting relationships. Clarify the unspecified wholesale/retail pricing and settlement rules before implementing their financial effects.
+
+### P21. Reseller web panel
+
+Provide a **Web Panel** option inside the reseller bot.
+
+When a reseller selects it, the bot asks them to provide a password. Their username is their numeric Telegram ID. They use that username and password to log into the web panel.
+
+The web panel is a management interface with all capabilities available to that reseller through the bot. It provides a better visual management experience and presents statistics and information using attractive charts.
+
+Access to this feature may be restricted to a membership tier or made available even to Free members, according to administrator settings.
+
+The web panel must use the same permissions, configuration, data, and business operations as the bot.
+
+### P22. Unified Ubuntu installation and instance management
+
+Everything must be integrated so that a small change does not require editing the same logic in several places.
+
+Provide a CLI that can be installed on Ubuntu Linux with one simple command. After installation, another command opens its interactive menu.
+
+The first menu option is **Add Instance**. The creation flow asks for:
+
+1. Instance type: ordinary customers or resellers.
+2. Telegram bot token.
+3. Administrator Telegram ID.
+4. 3x-ui panel URL.
+5. 3x-ui API key.
+
+Also ask for the instance's default bot language during installation/creation.
+
+When creating a reseller instance, ask whether its web panel should also be brought online.
+
+Provide options to view, manage, edit, and delete instances.
+
+Customer bots created by resellers must be provisioned through this same system. In the instance list, show a numeric child-bot count for each parent reseller instance. Each child must also be individually manageable.
+
+The CLI **Add Instance** field list above applies to operator-created top-level customer and reseller instances. Do not reuse that manual field-by-field CLI wizard for reseller-created child customer bots. For those children, creation begins inside the parent reseller bot: the reseller provides the Telegram bot token; the child administrator ID is the reseller's numeric Telegram ID; the 3x-ui panel URL and API key are inherited from the parent reseller instance; and any remaining required child-specific setup data is obtained or derived inside that bot flow. The shared instance-management runtime then provisions and manages the child as a normal configured instance of the customer-bot engine.
+
+### P23. Backup, restore, and migration
+
+The CLI must support both:
+
+- Global backup and restore.
+- Backup and restore for an individual instance.
+
+Restoring a backup on another server must transfer the bot with all its information and start it there. This includes the Telegram token, settings, customer database information, and all other data needed to continue operation.
+
+Preserve parent-child relationships and shared-wallet relationships where applicable. Resolve the dependency boundary for an individual child or parent backup explicitly, so that a restore never silently loses or duplicates shared financial state.
+
+The goal is a complete working bot migration, not an export that requires manually recreating its users, tokens, plans, or balances.
+
+### P24. One codebase and simple updates
+
+The customer bot, reseller bot, reseller-owned customer bots, web panel, and CLI must form one coherent system.
+
+If these were separate repositories, they would contain a great deal of duplicated code. Avoid that duplication through a shared implementation that improves consistency, performance, maintainability, and integration.
+
+Deploying changes must be very simple. When a release is already installed on a server and a new version is published, updating must be straightforward and preserve the installation's configuration and data.
+
+### P25. Persian and English bot languages
+
+The bots must support Persian and English.
+
+During installation of each instance, ask for its default bot language. Users subsequently change their language with `/language`.
+
+**Never show a language selector unless the user invokes `/language`.** Do not show it automatically on `/start`, during onboarding, on first use, after an update, or after a restore.
+
+Until the user changes it, use the instance's default language. Persist each user's selected language within the appropriate bot instance.
+
+## 3. Selected engineering stack
+
+Use the following stack for this project. These choices are architectural decisions for the requested product, not additional product requirements.
+
+| Concern | Selection |
+| --- | --- |
+| Architecture | One monorepo containing a Go modular monolith, one shared domain/application layer, and thin Telegram, HTTP/web, CLI, and worker adapters |
+| Backend and CLI | Go; standard-library HTTP facilities with Chi for routing; Cobra for commands and an interactive terminal menu |
+| Database | PostgreSQL; pgx for connectivity; sqlc for typed SQL queries; Goose for versioned migrations |
+| Durable background work | River using the same PostgreSQL database, including transactional job enqueueing |
+| Telegram integration | `go-telegram/bot` behind an internal adapter; one reusable bot engine with instance-specific configuration and policies |
+| 3x-ui integration | One internal, version-aware Go adapter designed from the mandatory primary contract `3x-ui_openapi.json` |
+| Web panel | React, TypeScript, Vite, React Router, TanStack Query, Tailwind CSS, shadcn/ui, and Apache ECharts |
+| HTTP contracts | OpenAPI as the shared API contract, with generated TypeScript API types/client code where suitable |
+| Web authentication | Server-side sessions, secure cookies, and Argon2id password hashes |
+| Deployment | Versioned Docker images and Docker Compose managed by the host CLI; optional Caddy service for web HTTPS |
+| Distribution | Versioned release artifacts, a verified installer, and a simple CLI update command |
+| Verification | Go tests and race detector where relevant; PostgreSQL integration tests; Vitest for meaningful frontend logic; Playwright for critical web workflows |
+
+Use the newest stable, mutually compatible releases available when implementation begins. Verify versions against official project documentation or release metadata. Record the exact selected versions, verification date, and compatibility rationale in a dependency manifest. Commit lockfiles and pin release artifacts/images; do not deploy using floating `latest` tags.
+
+Do not guess version numbers from memory. Do not adopt alpha, beta, RC, or development builds simply to claim the newest stack. If the newest stable release is incompatible with another required component, document the concrete incompatibility and select the newest compatible stable version.
+
+Go is the authoritative business-logic implementation. The React application is a presentation client. Build its assets for distribution with the Go application; do not require a production Node.js server merely to serve this administration UI.
+
+The modular monolith can run its HTTP, Telegram, and worker roles from the same release and share packages directly. Each bot instance is configuration and tenant data, not a new application build. Start with a simple deployment appropriate for an Ubuntu VPS. Do not introduce Kubernetes, a separate service per bot, or extra queue infrastructure without an established need.
+
+Use River's transactional enqueueing for reliable background work without adding Redis solely for a job queue. This does not make calls to Telegram or 3x-ui part of a PostgreSQL transaction; external effects still need idempotency and reconciliation. See [River's transactional enqueueing documentation](https://riverqueue.com/docs/transactional-enqueueing).
+
+For implementation references, consult the official [Go releases](https://go.dev/dl/), [PostgreSQL transaction documentation](https://www.postgresql.org/docs/current/transaction-iso.html), [React application guidance](https://react.dev/learn/build-a-react-app-from-scratch), and [Caddy HTTPS documentation](https://caddyserver.com/docs/automatic-https). The stack selection above is a project-specific engineering judgment, not a claim that any stack is universally best.
+
+## 4. Architecture and integration rules
+
+### 4.1. One implementation of each business capability
+
+Define shared modules for:
+
+- Instances, hierarchy, identity, tenant membership, and authorization.
+- Plans, durations, pricing, and price quotations.
+- Trials, quota accounting, and eligibility.
+- Orders, payments, administrator approvals, and refunds.
+- Wallets, reservations, ledger entries, and reseller funding.
+- VPN subscriptions, provisioning, renewal, and user-count changes.
+- Reseller memberships, entitlements, and inherited settings.
+- Referrals.
+- Support tickets.
+- Notifications and broadcasts.
+- Statistics and reporting.
+- Localization and money formatting.
+- Instance lifecycle, backups, restores, and upgrades.
+
+The bot handlers, web handlers, CLI, and workers must call these shared application operations. They must not contain separate copies of price calculations, permission checks, wallet mutations, trial limits, refund rules, or provisioning logic.
+
+Use one shared type and contract for each concept. Do not create competing customer-plan and reseller-plan implementations, multiple wallet engines, or separate refund engines that later need synchronization.
+
+Keep Telegram-specific presentation and web-specific presentation at their respective boundaries. Shared behavior does not require identical menus or identical permissions across roles.
+
+### 4.2. Tenancy and authorization
+
+Represent top-level instances, reseller accounts, and child customer instances explicitly. Associate every business record with its correct tenant and ownership context.
+
+Enforce authorization on the server for every operation, including Telegram callbacks and background jobs. UI visibility alone is not authorization.
+
+Scope user identity by bot instance where appropriate. The same numeric Telegram ID appearing in two bots must not accidentally share wallets, service ownership, permissions, or conversation state. Implement the explicitly required reseller funding relationship through a deliberate shared account reference.
+
+A 3x-ui group label is useful grouping metadata; it is not an authorization boundary. Never use knowledge of a group name as proof of ownership.
+
+Unassigned services still belong to the correct administrative tenant. Assigning an existing client must be checked for legitimate ownership and conflicting assignments.
+
+### 4.3. Entitlements and inherited settings
+
+Implement one entitlement resolver used by both bots and the web panel.
+
+Represent parent settings, reseller membership limits, child overrides, and effective values separately. A child may choose settings within its parent's allowed capabilities; it may not exceed the reseller's trial, refund, plan, or feature permissions.
+
+Do not copy inherited settings into unrelated hardcoded values. Changes must flow through a clear inheritance model. Clarify how new parent settings and membership changes affect existing purchases before implementing retroactive changes.
+
+Store the policy and pricing information needed to explain historical transactions without losing the original terms when an administrator later edits a plan.
+
+### 4.4. Money and shared credit
+
+Use exact monetary representations with explicit currency and input scale. Never use binary floating-point arithmetic for balances, prices, discounts, or refunds.
+
+Centralize conversion between administrator-facing toman inputs, stored monetary values, and localized display. The specified `200` to `200 thousand toman` behavior must not leak into inconsistent database arithmetic.
+
+Use an auditable ledger with immutable postings and explicit reversals. Represent available and reserved reseller funds so concurrent purchases cannot overspend the shared wallet. A displayed or cached balance must not be the sole safeguard against double spending.
+
+For a child-bot purchase, keep the customer's payment obligation and the reseller's funding obligation distinct, and coordinate them through one shared order workflow. Funds must be checked and reserved atomically at the appropriate point; a preliminary UI check is insufficient.
+
+Do not treat a wallet top-up and the later purchase using that balance as two sales. Do not create a second independently spendable copy of reseller credit for the child bot.
+
+Make administrator approvals, wallet credits, refunds, membership purchases, referral rewards, and broadcasts resistant to duplicate callbacks and retried jobs. A repeated click must not create duplicate financial effects.
+
+### 4.5. Provisioning and external-system consistency
+
+Create explicit durable states for orders, approvals, funding reservations, provisioning, fulfillment, and failures.
+
+Use stable operation identifiers, transactional job enqueueing, retry policies, and reconciliation. Handle timeouts where 3x-ui may have accepted a change but the application did not receive the response. Do not blindly create another VPN client on retry.
+
+Track multi-inbound provisioning as one logical subscription with the required external bindings. Handle partial success and avoid reporting successful fulfillment until the required work is complete.
+
+For user-count decreases, rotate the appropriate subscription ID across all associated bindings, deliver the replacement link and QR, and verify the previous subscription URL is no longer valid. Do not claim that rotating a subscription URL necessarily revokes every VPN configuration previously downloaded; check the real upstream behavior and clarify any additional revocation requirement before changing it.
+
+Persist conversation state and pending operations so routine restarts and updates do not discard receipt submissions, approval requests, or in-progress orders.
+
+### 4.6. Real 3x-ui compatibility
+
+Start with the complete supplied API document, `3x-ui_openapi.json`. It must be inspected before designing or implementing the integration. Map every required operation to the documented path, method, authentication, schema, and response. Give each integration subagent the file and the relevant contract references, and derive contract tests from it. Verify compatibility with the installed panel version without silently replacing the supplied contract with another version.
+
+The supplied 3.x specification describes Bearer API-token authentication and fields including `group`, `limitIp`, `subId`, `totalGB`, and `expiryTime`. Verify field units, semantics, update behavior, and the applicable client/inbound endpoints instead of inferring them from names. Do not use older endpoint assumptions simply because they are familiar.
+
+Preserve the requested panel-URL-plus-API-key setup. If an installed panel version lacks a required capability, report the exact mismatch and the minimum remedy; do not quietly replace the specified authentication flow or invent an endpoint.
+
+Verify trial expiry and traffic limits, IP-limit prerequisites, group assignment, multi-inbound association, subscription URLs, client discovery/assignment, renewal, and subscription-ID rotation against the supported panel behavior. Never write directly into the panel's database.
+
+The supplied file takes priority over generic online examples. Consult the official [3x-ui repository](https://github.com/MHSanaei/3x-ui) only as supplemental evidence for an actual gap or version discrepancy. If the supplied specification and installed panel disagree, report the concrete discrepancy and resolve it explicitly. Record the specific supported version or capability range after verification.
+
+### 4.7. Telegram runtime and localization
+
+Provide an instance supervisor that can start, stop, and reconfigure bots from the shared runtime. Ensure only one active update consumer processes a bot token at a time, including during migration.
+
+Use durable update deduplication and per-bot/user conversation state. Respect Telegram rate limits, handle blocked users and delivery failures, and retry background deliveries safely.
+
+Use shared Persian and English message catalogs for customer, reseller, child-bot, administrator, error, and notification flows. Preserve Persian text layout and readable mixed-direction links and numbers. Keep the `/language`-only selector rule explicit and tested.
+
+Store receipt and ticket attachments so they remain usable through the web panel and after restore. Do not assume a Telegram `file_id` from one bot can be reused by another; the official [Telegram Bot API](https://core.telegram.org/bots/api#sending-files) documents that file IDs are bot-specific.
+
+Provision child instances using legitimate Telegram bot credentials and the supported Telegram setup flow. The reseller must provide the child bot's Telegram token inside the parent reseller bot; do not invent a token-creation API or redirect normal child creation to the host CLI. Create the child under that reseller's parent-instance context, set the child administrator Telegram ID to the reseller's numeric Telegram ID, and inherit the parent's 3x-ui panel URL and API key. Obtain or derive any other required child-instance setup data through that same reseller-bot flow and the established inheritance rules rather than asking the reseller to re-enter inherited parent data.
+
+### 4.8. Web-panel authentication and usability
+
+Implement the required password setup through the bot and numeric-Telegram-ID username. Bind credentials and sessions to the correct instance/reseller context so the same Telegram ID in multiple instances is unambiguous.
+
+Hash passwords, avoid logging them, protect password setup/reset flows, rate-limit login attempts, and use secure server-side sessions with CSRF protection where applicable. Keep bot tokens and 3x-ui API keys out of browser responses.
+
+Provide full parity for the authenticated reseller's applicable bot operations, including management, settings, and approval workflows. Use the same backend policy checks. Tier restrictions must apply to direct API calls as well as visible controls.
+
+Build a polished responsive interface with clear charts, useful tables, empty states, validation, and loading/error states. Use real backend data. Provide RTL support wherever Persian content appears.
+
+### 4.9. Useful details within the explicitly delegated feature areas
+
+For user administration, include search, pagination, relevant filters, and a user detail view containing identity, wallet balance and history, owned services, orders, and related tickets/referrals where applicable.
+
+For statistics, include date-range filtering and useful measures such as registered users, new users, active and expired services, trials issued, approved purchases and renewals, pending approvals, wallet funding, refunds, and referral rewards. Keep wallet funding separate from sales revenue and show reseller/customer figures within the correct scope.
+
+These details complete the user-management and statistics areas where feature selection was explicitly delegated. They do not authorize unrelated product features or new commercial rules.
+
+## 5. Installation, backup, restoration, and releases
+
+Use one clear CLI entry point, such as `xui-sells`, to open the interactive menu. Provide direct subcommands for the same operations where useful for automation.
+
+The one-command Ubuntu installer must install the necessary runtime components, initialize persistent state, configure startup, and make the CLI available. Verify downloaded release artifacts. Do not require users to build the application or manually orchestrate its services.
+
+The installer and updater must coexist with the existing VPN/3x-ui deployment. Detect port conflicts, especially when bringing up the optional web panel; do not overwrite the existing panel, VPN configuration, or unrelated services.
+
+An instance manager must manage configured instances through the shared application. Reseller-created child bots must not require giving the bot runtime unrestricted host or Docker control.
+
+Backups must be consistent and versioned. Include all necessary application data: instance configuration and tokens, panel connection credentials, plans, users, service mappings and ownership, wallet ledger and reservations, orders, receipts, pending approvals, refunds, referrals, tickets and attachments, memberships, child links, inherited overrides, language preferences, credential hashes, durable workflow state, and required secret/key material.
+
+Protect backup secrets with encryption and provide a portable recovery mechanism. A backup encrypted with an unexported server-only key is not a working migration backup. Validate checksums, archive paths, format compatibility, and required dependencies before restoring.
+
+An individual-instance backup/restore must include or explicitly resolve its required dependencies without exporting unrelated tenants' data. A child tied to a parent reseller wallet cannot be restored by creating an unrelated copy of that wallet. A parent restore must handle its children according to the clarified backup scope.
+
+Implement a controlled migration cutover so the old and new installations do not both consume updates for the same token or duplicate pending payments. Resume the restored bot automatically after integrity and connectivity checks. Clearly report any external prerequisite preventing startup instead of falsely claiming success.
+
+Migrating this application does not automatically migrate the external 3x-ui/VPN server itself. Preserve its connection and service references, and explicitly clarify the scope if moving that infrastructure is also intended.
+
+Provide a simple update command and menu action. Updates should perform compatibility checks, take a recoverable backup, apply migrations, deploy the pinned release, verify health, and preserve all instances and configuration.
+
+Design rollback around both application and database compatibility. Do not claim that replacing an old binary reverses an incompatible database migration. Document and test the recovery path.
+
+## 6. Business questions that must not become hidden assumptions
+
+Record unresolved items in a decision log. Ask concise questions when a decision becomes necessary, grouping related questions. Do not force me to repeat requirements already stated. Continue architecture, integration verification, and other independent implementation while answers are pending.
+
+Clarify at least these points where the source specification does not settle them:
+
+1. **Trial accounting:** how cooldown and quota/window rules interact; rolling versus calendar windows; reset timezone; whether reseller daily allowances add an overall cap on top of per-plan limits; whether choosing a lower-tier trial variant uses a shared quota; and how child-bot trials consume reseller allowances.
+2. **Pricing and duration:** whether a month means a calendar month or a fixed day count; the exact base-price/extra-user formula; which components receive duration discounts; rounding; and charges or credits when user count changes partway through a term.
+3. **Paid service limits and renewal:** traffic allowance for paid plans, any traffic reset rules, and how remaining duration/traffic behaves on renewal. Do not silently assume unlimited traffic or discard remaining validity.
+4. **Refund settlement:** amount calculation, destination, approval effects on the service, eligibility after renewal, referral adjustments, and the corresponding customer/reseller accounting.
+5. **Referral settlement:** which completed spending qualifies, when a reward is earned/finalized, and where the reward is credited. Avoid counting a top-up and its subsequent spending twice.
+6. **Reseller economics:** wholesale charges, child retail prices and price-editing rights, settlement of direct receipts versus customer-wallet payments, trial costs if any, and handling a paid customer order when reseller funding becomes insufficient before fulfillment.
+7. **Membership lifecycle:** tier prices, durations, purchase/renewal behavior, upgrade/downgrade/expiry effects, and treatment of existing services, child bots, and web-panel access. Confirm trial-variant inheritance where not explicitly specified beyond Ultimate's three choices.
+8. **Additional reseller management powers:** the exact extra actions available in My Services and their boundaries.
+9. **Inheritance and historical terms:** which child settings can be overridden and what happens to existing transactions/services after parent settings or membership allowances change.
+10. **Backup boundaries:** whether a parent-instance backup includes its children, how an individual child reconnects to shared funding, and whether any external VPN infrastructure is intended to move.
+
+These are clarification points, not permission to postpone the entire project or replace missing decisions with arbitrary defaults. Keep dependent capabilities explicitly unresolved until the required business answer is available. Report an actual blocker honestly.
+
+## 7. Gemini 3.8 Flash High execution protocol
+
+### 7.1. Model roles
+
+You, Gemini 3.8 Flash High, own architecture, requirements coverage, shared contracts, dependency ordering, reviews, and integration decisions.
+
+Delegate implementation, migrations, tests, UI construction, deployment scripts, and fixes to Gemini 3.8 Flash High subagents with High thinking. Use the actual model identifier `gemini-3.8-flash` and thinking setting `high` in the tools/configuration supported by the environment. Calling an agent “Gemini 3.8 Flash High” in prose is not sufficient configuration.
+
+You may inspect the repository, inspect diffs, run verification, write architecture/coordination documents, and direct agents. Send implementation corrections back to the responsible Gemini 3.8 Flash High subagent. Do not distribute responsibility so broadly that no one owns the integrated result.
+
+Check the available agent tools and supported settings first. Do not silently substitute a different model or claim subagents ran when they did not. If the required model or delegation capability is unavailable, state the exact limitation and ask only for the necessary alternative.
+
+Model/delegation references: [Gemini 3.8 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash), [Gemini thinking](https://ai.google.dev/gemini-api/docs/thinking), and [Gemini CLI subagents](https://github.com/google-gemini/gemini-cli/blob/main/docs/core/subagents.md).
+
+### 7.2. Establish shared contracts before parallel coding
+
+First inspect the repository and read the supplied `3x-ui_openapi.json` without overwriting existing work. Make its use a mandatory prerequisite for every agent assigned 3x-ui-related work. Produce concise, practical documents covering:
+
+- Requirement IDs P01–P25 and a traceability matrix.
+- Architecture and module ownership.
+- Domain terminology and identifiers.
+- Tenant hierarchy and authorization rules.
+- Schema ownership and migration conventions.
+- Shared service interfaces and OpenAPI contracts.
+- Money representation, ledger invariants, and unresolved financial decisions.
+- Order, approval, provisioning, refund, and membership state machines.
+- Entitlement and inheritance resolution.
+- Localization rules.
+- Dependency versions and integration compatibility.
+- Milestones, task dependencies, and verification criteria.
+
+Give every agent the same authoritative documents. Keep them current as decisions are resolved.
+
+### 7.3. Delegate by shared capability
+
+Do not assign one agent to build an independent customer-bot backend and another to build an independent reseller-bot backend. That would create the duplication this project is specifically meant to avoid.
+
+Instead, delegate bounded modules and vertical slices against shared contracts. Suitable responsibility areas include core schema/tenancy, commerce/ledger, provisioning/trials, Telegram presentation, reseller entitlements/child instances, web presentation, and deployment/backup tooling.
+
+These are responsibility areas, not instructions to run all of them concurrently. Respect dependencies and the environment's concurrency limit. Begin with a shared foundation; parallelize only work that can proceed coherently against established contracts.
+
+Assign one owner at a time to shared schema/migrations and each contested interface or file set. Changes to a shared contract require the Gemini 3.8 Flash High orchestrator's review and communication to affected agents before dependent work continues.
+
+Each delegated task must specify:
+
+- Objective and requirement IDs.
+- Exact responsibility and file/module ownership.
+- Existing services/contracts the implementation must reuse.
+- Dependencies and prohibited scope changes.
+- Acceptance criteria and relevant tests.
+- A warning that other agents are working in the same codebase, that their edits must not be reverted, and that concurrent changes must be accommodated.
+
+Require each agent to report changed files, behavior implemented, checks run and their results, unresolved issues, and any contract changes it believes are needed.
+
+### 7.4. Integrate continuously
+
+Build and verify a complete vertical slice early: instance setup, a plan, a customer order, a manual approval or wallet payment, provisioning, and link/QR delivery. Then expand through the full requirements.
+
+Integrate completed modules continuously. Do not wait until the end to discover that the wallet model, reseller model, and bot handlers disagree.
+
+Use a fresh Gemini 3.8 Flash High reviewer for critical integrated changes when capacity permits. The reviewer should inspect actual diffs and test evidence, especially financial consistency, tenant isolation, entitlements, external retries, backups, and localization.
+
+Reject duplicate domain logic during review. Fix the shared abstraction and direct affected agents to use it.
+
+## 8. Verification and completion criteria
+
+Keep a requirement-to-implementation-and-test matrix for P01–P25. A requirement is not complete merely because a button, empty handler, mock response, or TODO exists.
+
+### 8.1. Formal anti-duplication milestone gate
+
+Before every milestone is accepted, the Gemini 3.8 Flash High orchestrator must perform an explicit anti-duplication review of the actual implementation and affected call paths. This gate is mandatory; a milestone cannot be marked complete until it passes.
+
+Inspect customer bots, reseller bots, child customer bots, HTTP/web handlers, Telegram handlers, CLI code, workers, and the shared application/domain layer for equivalent domain or business rules implemented in more than one place. In particular, look for duplicated or independently reimplemented pricing, plan rules, trial eligibility and quotas, authorization and entitlements, inherited settings, wallet/ledger mutations, reseller funding, orders and approvals, refunds, referrals, provisioning, renewal and user-count changes, instance creation rules, and other domain decisions.
+
+Presentation adapters may format input/output and orchestrate user interaction, but they must call shared application operations for business decisions. If two presentation adapters calculate, validate, authorize, mutate, or decide the same business rule independently, the milestone fails this gate unless there is a concrete documented architectural reason why sharing that logic would be incorrect. Mere convenience, small code size, or different UI wording is not an acceptable reason.
+
+When duplication is found, fix the shared abstraction first and route every affected adapter through it. Do not accept a milestone with a promise to deduplicate later. Any approved exception must identify the duplicated-looking code, explain why it is not the same business responsibility or why a shared abstraction would be harmful, and be recorded in the architecture/decision log.
+
+The milestone review record must include the anti-duplication gate result, the adapters and modules inspected, any duplicate candidates found, the shared operations/contracts verified as the single source of truth, and any approved exception. A simple passing test suite is not sufficient evidence for this gate; inspect the code and call paths themselves.
+
+Use focused tests for meaningful behavior and high-risk boundaries. At minimum, demonstrate:
+
+- Trial quotas are independent across plans, and the configured repeat-trial rules are enforced.
+- Duplicate or concurrent trial requests cannot exceed the intended allowance.
+- The purchase wizard preserves the required sequence and creates the intended 3x-ui client settings.
+- Both receipt text and receipt photos reach the correct administrator.
+- Direct-payment provisioning does not happen before approval.
+- Wallet top-ups, purchases, approvals, and credits are applied only once under retries and concurrent clicks.
+- Subscription delivery includes a usable link and QR code, and My Services can resend them.
+- User-count increases charge according to the resolved rule; decreases rotate the subscription ID, including during renewal.
+- Plan descriptions appear before purchase and usage notes after purchase.
+- Inbound selection supports the required plural case.
+- Toman examples format as `200 هزار تومن` and `1 میلیون تومن`, with exact arithmetic.
+- Manual credits support individual, selected, and all-user scopes, with the administrator message on the next line.
+- Pending approvals include purchases, renewals, top-ups, and refunds.
+- Broadcast audiences distinguish all users from users with active subscriptions.
+- Refund eligibility, optional photos, and configured windows behave correctly.
+- Referral rewards follow the resolved spending and settlement rules without double counting.
+- Reseller onboarding requires the service/group name as the first required step after start.
+- Tier-specific settings, restricted plans, and feature gates are enforced server-side.
+- Ultimate members can choose the Free, Pro, and Ultimate trial variants.
+- Child bots reuse the customer engine and remain within their reseller's permissions.
+- Reseller-created child bots are created from inside the parent reseller bot using the reseller-supplied Telegram token, inherit the parent's 3x-ui panel URL and API key, use the reseller's numeric Telegram ID as administrator ID, and do not require re-entry of those inherited values through the host CLI.
+- Concurrent purchases through a reseller and their child bots cannot overspend shared funding.
+- Insufficient reseller credit produces the specified customer error and reseller notification.
+- Numeric-Telegram-ID web login works with the password set through the bot, and web capabilities match the reseller's bot permissions.
+- One tenant cannot access another tenant's services, wallets, tickets, receipts, or configuration.
+- New instances start in their configured language; language selection appears only after `/language`.
+- The instance list shows parent child-bot counts and supports individual child management.
+- Global and individual-instance backups restore usable application state, including financial records, attachments, tokens, and necessary relationships.
+- A migration cutover does not cause two active bot consumers or duplicate financial/provisioning operations.
+- A fresh supported Ubuntu installation works through the documented single install command.
+- An upgrade preserves data and running instances, and the documented failure-recovery process works.
+- Every accepted milestone has a recorded passing anti-duplication gate showing that equivalent domain/business rules are not independently implemented across presentation adapters or instance types, except for explicitly documented architectural exceptions.
+
+Use a disposable test environment for external integration checks. Distinguish simulated API tests from successful verification against a real compatible 3x-ui panel and Telegram bot. Never claim a live test passed if credentials or infrastructure were unavailable.
+
+Deliver the complete monorepo, pinned dependency configuration, database migrations, usable bots and web panel, CLI and installer, release/update workflow, backup/restore implementation, test evidence, and concise installation and operating documentation.
+
+Maintain a durable progress log so work can continue across context limits without losing decisions or repeating implementation. Communicate meaningful progress and actual blockers concisely.
+
+Start by inspecting the repository and reading `3x-ui_openapi.json` as the primary integration source, checking the requested agent configuration, mapping the requirements, and establishing the shared architecture. Then delegate and implement the system in dependency order. Continue until the specified system is complete or a concrete external dependency requires my input; do not stop merely after producing a plan or scaffolding.

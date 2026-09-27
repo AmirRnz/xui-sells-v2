@@ -1,0 +1,30 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test artifacts
+*.test
+*.out
+
+# Data & Environment
+data/
+*.env
+*.tar.gz.enc
+tmp/
+
+# Node dependencies & build caches
+node_modules/
+web/node_modules/
+.npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tsbuildinfo
+
+# OS artifacts
+.DS_Store
+Thumbs.db
