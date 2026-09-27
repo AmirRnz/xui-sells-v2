@@ -81,7 +81,7 @@ fi
 echo -e "${BLUE}[INFO] Setting up installation in ${INSTALL_DIR}...${NC}"
 
 REPO_URL="https://github.com/AmirRnz/xui-sells-v2.git"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "")"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
 if [[ -d "${INSTALL_DIR}/.git" ]]; then
     echo -e "${BLUE}[INFO] Updating existing installation in ${INSTALL_DIR}...${NC}"
     git -C "${INSTALL_DIR}" pull --ff-only || true
