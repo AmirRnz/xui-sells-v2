@@ -37,6 +37,10 @@ func (m *mockSender) SendPhoto(ctx context.Context, chatID int64, photo []byte, 
 	return nil
 }
 
+func (m *mockSender) AnswerCallbackQuery(ctx context.Context, callbackQueryID string, text string) error {
+	return nil
+}
+
 type mockXUIClient struct{}
 
 func (m *mockXUIClient) AddClient(ctx context.Context, req xui.AddClientRequest) error { return nil }

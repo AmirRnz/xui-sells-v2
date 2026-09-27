@@ -12,17 +12,30 @@ var (
 	ErrBotNotFound       = errors.New("bot instance not found")
 )
 
+type managedBot struct {
+	instance *BotInstance
+	cancel   context.CancelFunc
+}
+
 // Supervisor coordinates the multi-tenant bot lifecycle for customer, reseller, and child bots.
 type Supervisor struct {
 	mu   sync.RWMutex
-	bots map[int64]*BotInstance
+	bots map[int64]*managedBot
+	ctx  context.Context
 }
 
 // NewSupervisor creates a supervisor.
 func NewSupervisor() *Supervisor {
 	return &Supervisor{
-		bots: make(map[int64]*BotInstance),
+		bots: make(map[int64]*managedBot),
 	}
+}
+
+// SetContext sets the root context for spawned bot instances.
+func (s *Supervisor) SetContext(ctx context.Context) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ctx = ctx
 }
 
 // RegisterBot adds and starts a bot instance.
@@ -34,7 +47,18 @@ func (s *Supervisor) RegisterBot(b *BotInstance) error {
 		return fmt.Errorf("%w: ID %d", ErrBotAlreadyRunning, b.Instance.ID)
 	}
 
-	s.bots[b.Instance.ID] = b
+	baseCtx := s.ctx
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	botCtx, cancel := context.WithCancel(baseCtx)
+
+	s.bots[b.Instance.ID] = &managedBot{
+		instance: b,
+		cancel:   cancel,
+	}
+
+	go b.StartPolling(botCtx)
 	return nil
 }
 
@@ -43,10 +67,12 @@ func (s *Supervisor) StopBot(instanceID int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.bots[instanceID]; !exists {
+	mb, exists := s.bots[instanceID]
+	if !exists {
 		return ErrBotNotFound
 	}
 
+	mb.cancel()
 	delete(s.bots, instanceID)
 	return nil
 }
@@ -55,8 +81,11 @@ func (s *Supervisor) StopBot(instanceID int64) error {
 func (s *Supervisor) GetBot(instanceID int64) (*BotInstance, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	b, ok := s.bots[instanceID]
-	return b, ok
+	mb, ok := s.bots[instanceID]
+	if !ok {
+		return nil, false
+	}
+	return mb.instance, true
 }
 
 // ListRunning returns the IDs of all running bots.
@@ -75,7 +104,8 @@ func (s *Supervisor) CountChildBots(parentInstanceID int64) int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	count := 0
-	for _, b := range s.bots {
+	for _, mb := range s.bots {
+		b := mb.instance
 		if b.Instance.IsChild() && b.Instance.ParentInstanceID != nil && *b.Instance.ParentInstanceID == parentInstanceID {
 			count++
 		}
@@ -90,8 +120,9 @@ func (s *Supervisor) Count() int {
 	return len(s.bots)
 }
 
-// StartAll begins polling or webhook processing for all registered bots.
+// StartAll begins polling for all registered bots.
 func (s *Supervisor) StartAll(ctx context.Context) error {
+	s.SetContext(ctx)
 	return nil
 }
 
@@ -99,5 +130,8 @@ func (s *Supervisor) StartAll(ctx context.Context) error {
 func (s *Supervisor) StopAll() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.bots = make(map[int64]*BotInstance)
+	for _, mb := range s.bots {
+		mb.cancel()
+	}
+	s.bots = make(map[int64]*managedBot)
 }

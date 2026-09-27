@@ -15,6 +15,9 @@ import (
 
 	adapterHTTP "xui-sells-v2/internal/adapter/http"
 	"xui-sells-v2/internal/adapter/telegram"
+	"xui-sells-v2/internal/app/provisioning"
+	"xui-sells-v2/internal/domain"
+	"xui-sells-v2/internal/infra/xui"
 	"xui-sells-v2/web"
 )
 
@@ -58,25 +61,64 @@ var runCmd = &cobra.Command{
 			}
 		}()
 
-		// 2. Initialize Telegram Bot Supervisor
+		// 2. Initialize Telegram Bot Supervisor with dynamic instance synchronization
 		supervisor := telegram.NewSupervisor()
-		if appStore != nil {
+		_ = supervisor.StartAll(ctx)
+
+		syncBots := func() {
+			if appStore == nil {
+				return
+			}
 			instances, err := appStore.List(ctx)
-			if err == nil {
-				for _, inst := range instances {
-					if inst.IsActive && inst.BotToken != "" {
-						botInstance := telegram.NewBotInstance(inst, telegram.BotDependencies{
-							Supervisor: supervisor,
-						})
-						_ = supervisor.RegisterBot(botInstance)
+			if err != nil {
+				return
+			}
+
+			activeIDs := make(map[int64]bool)
+			for _, inst := range instances {
+				if !inst.IsActive || inst.BotToken == "" {
+					continue
+				}
+				activeIDs[inst.ID] = true
+				existingBot, running := supervisor.GetBot(inst.ID)
+				if !running {
+					botInst := buildBotInstance(inst, supervisor)
+					if err := supervisor.RegisterBot(botInst); err == nil {
+						fmt.Printf("🤖 Bot instance '%s' (ID %d) started.\n", inst.Name, inst.ID)
 					}
+				} else if existingBot.Instance.BotToken != inst.BotToken || existingBot.Instance.PanelURL != inst.PanelURL || existingBot.Instance.GroupName != inst.GroupName {
+					_ = supervisor.StopBot(inst.ID)
+					botInst := buildBotInstance(inst, supervisor)
+					_ = supervisor.RegisterBot(botInst)
+					fmt.Printf("🔄 Bot instance '%s' (ID %d) reloaded with new configuration.\n", inst.Name, inst.ID)
+				}
+			}
+
+			for _, runningID := range supervisor.ListRunning() {
+				if !activeIDs[runningID] {
+					_ = supervisor.StopBot(runningID)
+					fmt.Printf("🛑 Bot instance ID %d stopped.\n", runningID)
 				}
 			}
 		}
 
-		_ = supervisor.StartAll(ctx)
-		fmt.Printf("🤖 Telegram Bot Supervisor started with %d active bot(s).\n", supervisor.Count())
+		syncBots()
+		fmt.Printf("🤖 Telegram Bot Supervisor initialized with %d active bot(s).\n", supervisor.Count())
 		fmt.Println("🚀 System ready. Press Ctrl+C to shut down.")
+
+		// Background watcher to dynamically load instances added/modified via CLI
+		go func() {
+			ticker := time.NewTicker(3 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					syncBots()
+				}
+			}
+		}()
 
 		// Wait for termination signal
 		<-ctx.Done()
@@ -97,4 +139,18 @@ var runCmd = &cobra.Command{
 func init() {
 	runCmd.Flags().IntVar(&runHTTPPort, "http-port", 8080, "Port for the HTTP web panel")
 	runCmd.Flags().StringVar(&runBindAddr, "bind", "0.0.0.0", "Network interface address to bind to")
+}
+
+func buildBotInstance(inst domain.Instance, supervisor *telegram.Supervisor) *telegram.BotInstance {
+	sender := telegram.NewHTTPSender(inst.BotToken)
+	xuiClient := xui.NewClient(inst.PanelURL, inst.PanelAPIKey)
+	provSvc := provisioning.NewService(xuiClient)
+
+	deps := telegram.BotDependencies{
+		Sender:     sender,
+		ProvSvc:    provSvc,
+		Supervisor: supervisor,
+	}
+
+	return telegram.NewBotInstance(inst, deps)
 }

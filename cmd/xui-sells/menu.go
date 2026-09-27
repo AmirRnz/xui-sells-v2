@@ -14,6 +14,7 @@ import (
 	"xui-sells-v2/internal/app/backup"
 	"xui-sells-v2/internal/app/instance"
 	"xui-sells-v2/internal/domain"
+	"xui-sells-v2/internal/infra/xui"
 )
 
 var menuCmd = &cobra.Command{
@@ -255,12 +256,26 @@ func addInstanceWizard(ctx context.Context, reader *bufio.Reader, out io.Writer,
 	}
 
 	// Step 4: 3x-ui Panel URL
-	fmt.Fprint(out, "4. Enter 3x-ui Panel URL (e.g. https://panel.example.com:2053): ")
+	fmt.Fprint(out, "4. Enter 3x-ui Panel URL (include webBasePath if configured, e.g. https://panel.example.com:2053/webBasePath): ")
 	panelURL, _ := readTrimmed(reader)
 
 	// Step 5: 3x-ui API Key / Cookie Credentials
 	fmt.Fprint(out, "5. Enter 3x-ui API Key: ")
 	apiKey, _ := readTrimmed(reader)
+
+	if panelURL != "" && apiKey != "" {
+		fmt.Fprintln(out, "   Testing connection to 3x-ui panel...")
+		testClient := xui.NewClient(panelURL, apiKey)
+		testCtx, testCancel := context.WithTimeout(ctx, 10*time.Second)
+		inbounds, err := testClient.ListInbounds(testCtx)
+		testCancel()
+		if err != nil {
+			fmt.Fprintf(out, "   ⚠️  Warning: Could not connect to 3x-ui: %v\n", err)
+			fmt.Fprintln(out, "       Please double check that webBasePath is included (e.g. /KjVLQxfluQ97turalx) and API key is correct.")
+		} else {
+			fmt.Fprintf(out, "   ✅ Connected to 3x-ui successfully! Found %d inbounds.\n", len(inbounds))
+		}
+	}
 
 	// Step 6: Default Bot Language (Persian or English)
 	fmt.Fprintln(out, "6. Select Default Bot Language:")

@@ -49,6 +49,7 @@ type WizardState struct {
 type Sender interface {
 	SendMessage(ctx context.Context, chatID int64, text string, replyMarkup any) error
 	SendPhoto(ctx context.Context, chatID int64, photo []byte, caption string, replyMarkup any) error
+	AnswerCallbackQuery(ctx context.Context, callbackQueryID string, text string) error
 }
 
 // BotDependencies holds references to shared application core services.

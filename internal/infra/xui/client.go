@@ -3,6 +3,7 @@ package xui
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -159,6 +160,9 @@ func NewClient(baseURL, apiKey string, opts ...Option) *Client {
 		apiKey:  strings.TrimSpace(apiKey),
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
 		},
 	}
 	for _, opt := range opts {
