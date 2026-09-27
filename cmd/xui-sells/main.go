@@ -51,6 +51,10 @@ func initConfig() {
 		return
 	}
 
+	if envDataDir := os.Getenv("DATA_DIR"); envDataDir != "" && dataDir == "data" {
+		dataDir = envDataDir
+	}
+
 	if instancesFile == "" {
 		instancesFile = filepath.Join(dataDir, "instances.json")
 	}

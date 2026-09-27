@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -29,7 +30,11 @@ var runCmd = &cobra.Command{
 		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 
-		fmt.Println("Starting xui-sells-v2 background runtime...")
+		if envPort := os.Getenv("PORT"); envPort != "" && runHTTPPort == 8080 {
+			if p, err := strconv.Atoi(envPort); err == nil {
+				runHTTPPort = p
+			}
+		}
 
 		// 1. Initialize HTTP Web Panel Server
 		httpCfg := adapterHTTP.Config{

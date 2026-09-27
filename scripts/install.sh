@@ -79,23 +79,28 @@ fi
 
 # 5. Initialize Installation Directory
 echo -e "${BLUE}[INFO] Setting up installation in ${INSTALL_DIR}...${NC}"
-mkdir -p "${INSTALL_DIR}" "${INSTALL_DIR}/data" "${INSTALL_DIR}/scripts"
 
-# Copy or clone configuration files
 REPO_URL="https://github.com/AmirRnz/xui-sells-v2.git"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "")"
-if [[ -n "${SCRIPT_DIR}" && -f "${SCRIPT_DIR}/docker-compose.yml" ]]; then
-    cp -r "${SCRIPT_DIR}/../"* "${INSTALL_DIR}/"
-elif [[ -d "${INSTALL_DIR}/.git" ]]; then
+if [[ -d "${INSTALL_DIR}/.git" ]]; then
     echo -e "${BLUE}[INFO] Updating existing installation in ${INSTALL_DIR}...${NC}"
     git -C "${INSTALL_DIR}" pull --ff-only || true
+elif [[ -n "${SCRIPT_DIR}" && -f "${SCRIPT_DIR}/docker-compose.yml" && "${SCRIPT_DIR}" != "${INSTALL_DIR}/scripts" ]]; then
+    mkdir -p "${INSTALL_DIR}"
+    cp -r "${SCRIPT_DIR}/../"* "${INSTALL_DIR}/"
 else
     echo -e "${BLUE}[INFO] Fetching system files from ${REPO_URL}...${NC}"
     if ! command -v git &> /dev/null; then
         apt-get update -y && apt-get install -y git
     fi
-    git clone --depth 1 "${REPO_URL}" "${INSTALL_DIR}"
+    TMP_CLONE=$(mktemp -d)
+    git clone --depth 1 "${REPO_URL}" "${TMP_CLONE}"
+    mkdir -p "${INSTALL_DIR}"
+    cp -a "${TMP_CLONE}/." "${INSTALL_DIR}/"
+    rm -rf "${TMP_CLONE}"
 fi
+
+mkdir -p "${INSTALL_DIR}/data" "${INSTALL_DIR}/scripts"
 
 # Create environment configuration
 if [[ ! -f "${INSTALL_DIR}/.env" ]]; then
