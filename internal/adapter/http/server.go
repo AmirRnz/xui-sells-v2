@@ -99,7 +99,10 @@ func NewServer(cfg Config) *Server {
 	}
 
 	if s.webFS == nil {
-		if sub, err := fs.Sub(web.DistFS, "dist"); err == nil {
+		s.webFS = web.DistFS
+	}
+	if sub, err := fs.Sub(s.webFS, "dist"); err == nil {
+		if _, err := fs.Stat(sub, "index.html"); err == nil {
 			s.webFS = sub
 		}
 	}
@@ -125,6 +128,18 @@ func (s *Server) setupRoutes() {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+
+	// Liveness & health check probes
+	r.Get("/healthz", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok","version":"2.0.0"}`))
+	})
+	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok","version":"2.0.0"}`))
+	})
 
 	// API route registration helper
 	registerAPIRoutes := func(api chi.Router) {
