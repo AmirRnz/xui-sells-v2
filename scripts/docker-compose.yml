@@ -1,3 +1,5 @@
+name: xui-sells
+
 services:
   app:
     image: xui-sells-v2:latest

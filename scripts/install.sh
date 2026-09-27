@@ -123,10 +123,10 @@ cat <<'EOF' > "${BINARY_LINK}"
 INSTALL_DIR="/opt/xui-sells"
 if [[ -t 0 ]]; then
     # Interactive mode (terminal attached)
-    docker compose -f "${INSTALL_DIR}/scripts/docker-compose.yml" --project-directory "${INSTALL_DIR}" exec -it app /usr/local/bin/xui-sells "$@"
+    docker compose -p xui-sells -f "${INSTALL_DIR}/scripts/docker-compose.yml" --project-directory "${INSTALL_DIR}" exec -it app /usr/local/bin/xui-sells "$@"
 else
     # Non-interactive / headless mode
-    docker compose -f "${INSTALL_DIR}/scripts/docker-compose.yml" --project-directory "${INSTALL_DIR}" exec -T app /usr/local/bin/xui-sells "$@"
+    docker compose -p xui-sells -f "${INSTALL_DIR}/scripts/docker-compose.yml" --project-directory "${INSTALL_DIR}" exec -T app /usr/local/bin/xui-sells "$@"
 fi
 EOF
 chmod +x "${BINARY_LINK}"
@@ -134,7 +134,7 @@ chmod +x "${BINARY_LINK}"
 # 7. Start System Containers
 echo -e "${BLUE}[INFO] Starting system containers...${NC}"
 cd "${INSTALL_DIR}"
-docker compose -f scripts/docker-compose.yml up -d --build
+docker compose -p xui-sells -f scripts/docker-compose.yml up -d --build
 
 # 8. Success Banner & Instructions
 echo -e "${GREEN}${BOLD}"
