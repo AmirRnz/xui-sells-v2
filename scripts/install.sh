@@ -143,4 +143,4 @@ echo -e "  ${CYAN}${BOLD}xui-sells menu${NC}"
 echo ""
 echo -e "Web Panel access is available on: ${BOLD}http://<YOUR_SERVER_IP>:${WEB_PORT}${NC}"
 echo "====================================================================="
-EOF
+
